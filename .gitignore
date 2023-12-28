@@ -239,3 +239,4 @@ cleanteeh.sh
 
 # End of https://www.toptal.com/developers/gitignore/api/python,django
 geo-trans-img/data
+edge-filter/data
