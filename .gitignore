@@ -241,3 +241,5 @@ cleanteeh.sh
 geo-trans-img/data
 edge-filter/data
 cartoonizing-img/data
+body-tracking/data
+feature-extraction-img/data
