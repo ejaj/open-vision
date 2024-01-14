@@ -245,3 +245,5 @@ body-tracking/data
 feature-extraction-img/data
 seam-carving/data
 shape-image-segmentation/data
+file-camera-gui/data
+file-camera-gui/cameo/data
