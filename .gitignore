@@ -247,3 +247,5 @@ seam-carving/data
 shape-image-segmentation/data
 handling-files/data
 handling-files/cameo/data
+image-processing/data
+image-processing/cameo/data
