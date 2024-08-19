@@ -4,10 +4,14 @@ import time
 
 
 class CaptureManager:
-    def __init__(self, capture, preview_window_manager=None, should_mirror_preview=False):
-        self.preview_window_manager = preview_window_manager
-        self.should_mirror_preview = should_mirror_preview
-        self.capture = capture
+    def __init__(self, capture, live_preview=None, mirror_preview=False, shouldMirrorPreview=False,
+                 shouldConvertBitDepth10To8=True):
+        self.live_preview = live_preview
+        self.mirror_preview = mirror_preview
+
+        self.shouldMirrorPreview = shouldMirrorPreview
+        self.shouldConvertBitDepth10To8 = shouldConvertBitDepth10To8
+
         self._capture = capture
         self._channel = 0
         self._entered_frame = False
@@ -20,6 +24,7 @@ class CaptureManager:
         self._start_time = None
         self._frames_elapsed = 0
         self._fps_estimate = None
+        self._grayscale = False
 
     @property
     def channel(self):
@@ -34,7 +39,12 @@ class CaptureManager:
     @property
     def frame(self):
         if self._entered_frame and self._frame is None:
-            _, self._frame = self._capture.retrieve(self._frame, self.channel)
+            _, self._frame = self._capture.retrieve(
+                self._frame, self.channel)
+            if self.shouldConvertBitDepth10To8 and \
+                    self._frame is not None and \
+                    self._frame.dtype == np.uint16:
+                self._frame = (self._frame >> 2).astype(np.uint8)
         return self._frame
 
     @property
@@ -46,50 +56,41 @@ class CaptureManager:
         return self._video_filename is not None
 
     def enter_frame(self):
-        """
-        Capture the next frame, if any.
-        :return:
-        """
-        # But first, check that any previous frame was exited.
-        assert not self._entered_frame, 'previous enterFrame() had no matching exitFrame()'
+        assert not self._entered_frame, 'previous enter_frame() had no matching exit_frame()'
 
         if self._capture is not None:
             self._entered_frame = self._capture.grab()
 
     def exit_frame(self):
-        """
-        Draw to the window. Write to files. Release the frame.
-        :param self:
-        :return:
-        """
-
         # Check whether any grabbed frame is retrievable.
         # The getter may retrieve and cache the frame.
-        if self.frame is None:
+        if self._frame is None:
             self._entered_frame = False
             return
-
         # Update the FPS estimate and related variables.
         if self._frames_elapsed == 0:
             self._start_time = time.perf_counter()
         else:
             time_elapsed = time.perf_counter() - self._start_time
-            self._fps_estimate = self._start_time / time_elapsed
+            self._fps_estimate = self._frames_elapsed / time_elapsed
         self._frames_elapsed += 1
 
+        # Apply grayscale if the flag is set
+        if self._grayscale:
+            self._frame = cv2.cvtColor(self._frame, cv2.COLOR_BGR2GRAY)
+
         # Draw to the window, if any.
-        if self.preview_window_manager is not None:
-            if self.should_mirror_preview:
+        if self.live_preview is not None:
+            if self.mirror_preview:
                 mirrored_frame = np.fliplr(self._frame)
-                self.preview_window_manager.show(mirrored_frame)
+                self.live_preview.show(mirrored_frame)
             else:
-                self.preview_window_manager.show(self._frame)
+                self.live_preview.show(self._frame)
 
         # Write to the image file, if any.
         if self.is_writing_image:
             cv2.imwrite(self._image_filename, self._frame)
             self._image_filename = None
-
         # Write to the video file, if any.
         self._write_video_frame()
 
@@ -97,11 +98,21 @@ class CaptureManager:
         self._frame = None
         self._entered_frame = False
 
-    def _write_video_frame(self):
+    def write_image(self, filename):
+        self._image_filename = filename
 
+    def start_writing_video(self, filename, encoding=cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')):
+        self._video_filename = filename
+        self._video_encoding = encoding
+
+    def stop_writing_video(self):
+        self._video_filename = None
+        self._video_encoding = None
+        self._video_writer = None
+
+    def _write_video_frame(self):
         if not self.is_writing_video:
             return
-
         if self._video_writer is None:
             fps = self._capture.get(cv2.CAP_PROP_FPS)
             if np.isnan(fps) or fps <= 0.0:
@@ -112,65 +123,36 @@ class CaptureManager:
                     return
                 else:
                     fps = self._fps_estimate
-            size = (int(self._capture.get(
-                cv2.CAP_PROP_FRAME_WIDTH)),
-                    int(self._capture.get(
-                        cv2.CAP_PROP_FRAME_HEIGHT)))
+            size = (int(self._capture.get(cv2.CAP_PROP_FRAME_WIDTH)), int(self._capture.get(cv2.CAP_PROP_FRAME_HEIGHT)))
             self._video_writer = cv2.VideoWriter(self._video_filename, self._video_encoding, fps, size)
-
         self._video_writer.write(self._frame)
 
-    def write_image(self, filename):
-        """
-        Write the next exited frame to an image file.
-        :param filename:
-        :return:
-        """
-        self._image_filename = filename
-
-    def start_writing_video(self, filename, encoding=cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')):
-        """
-        Start writing exited frames to a video file.
-        :param filename:
-        :param encoding:
-        :return:
-        """
-        self._video_filename = filename
-        self._video_encoding = encoding
-
-    def stop_writing_video(self):
-        """
-        Stop writing exited frames to a video file
-        :return:
-        """
-        self._video_filename = None
-        self._video_encoding = None
-        self._video_writer = None
+    def make_grayscale(self, grayscale):
+        self._grayscale = grayscale
 
 
-class WindowManager(object):
-
-    def __init__(self, window_name, keypress_call_back=None):
-        self.keypress_call_back = keypress_call_back
+class WindowManager:
+    def __init__(self, window_name, keypressCallback=None):
         self._window_name = window_name
-        self._is_window_created = False
+        self._keypressCallback = keypressCallback
+        self._window_created = False  #
 
     @property
     def is_window_created(self):
-        return self._is_window_created
+        return self._window_created
 
     def create_window(self):
         cv2.namedWindow(self._window_name)
-        self._is_window_created = True
+        self._window_created = True
 
     def show(self, frame):
         cv2.imshow(self._window_name, frame)
 
     def destroy_window(self):
         cv2.destroyWindow(self._window_name)
-        self._is_window_created = False
+        self._window_created = False
 
     def process_events(self):
         keycode = cv2.waitKey(1)
-        if self.keypress_call_back is not None and keycode != -1:
-            self.keypress_call_back(keycode)
+        if self._keypressCallback is not None and keycode != -1:
+            self._keypressCallback(keycode)
