@@ -1,6 +1,8 @@
-import os
+import sys
+
 import cv2
 import numpy as np
+import os
 
 
 def normalize(X, low, high, dtype=None):
@@ -10,61 +12,70 @@ def normalize(X, low, high, dtype=None):
     return np.asarray(X, dtype=dtype) if dtype else np.asarray(X)
 
 
-def read_images(path, sz=None):
-    c = 0
+def read_images_and_labels(path, total_images=311, images_per_person=None):
     X, y = [], []
-    for dirname, dirnames, filenames in os.walk(path):
-        for subdirname in dirnames:
-            subject_path = os.path.join(dirname, subdirname)
-            for filename in os.listdir(subject_path):
-                filepath = os.path.join(subject_path, filename)
-                im = cv2.imread(filepath, cv2.IMREAD_GRAYSCALE)
-                if im is None:
-                    print(f"Image {filepath} is None")
-                    continue
-                if sz is not None:
-                    im = cv2.resize(im, sz)
-                X.append(np.asarray(im, dtype=np.uint8))
-                y.append(c)
-            c += 1
+    if images_per_person is None:
+        images_per_person = total_images
+
+    current_label = 0
+    image_count = 0
+
+    for i in range(total_images):
+        filepath = os.path.join(path, f"{i}.pgm")
+        image = cv2.imread(filepath, cv2.IMREAD_GRAYSCALE)
+        if image is not None:
+            X.append(np.asarray(image, dtype=np.uint8))
+            y.append(current_label)
+            image_count += 1
+            if image_count >= images_per_person:
+                current_label += 1
+                image_count = 0
+        else:
+            print(f"Failed to read image at {filepath}")
+
     return X, y
 
 
-def face_rec():
-    names = ['Joe', 'Jane', 'Jack']
-    path_to_images = 'path/to/your/image/dataset'  # Set your image dataset path here
-    image_size = (200, 200)
-    out_dir = 'data/stil'
+def face_recognition_demo(image_path, output_dir=None):
+    names = ['Kazi', 'Jane', 'Jack']
 
-    X, y = read_images(path_to_images, image_size)
+    # Load images and labels
+    [X, y] = read_images_and_labels(image_path)
     y = np.asarray(y, dtype=np.int32)
 
+    # Create an EigenFace Recognizer
     model = cv2.face.EigenFaceRecognizer_create()
+
+    # Train the recognizer on the images and labels
     model.train(np.asarray(X), np.asarray(y))
 
-    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+    # Setup video capture
     camera = cv2.VideoCapture(0)
+    face_cascade = cv2.CascadeClassifier('./cascades/haarcascade_frontalface_default.xml')
 
     while True:
-        read, img = camera.read()
+        ret, img = camera.read()
         faces = face_cascade.detectMultiScale(img, 1.3, 5)
         for (x, y, w, h) in faces:
-            img = cv2.rectangle(img, (x, y), (x + w, y + h), (255, 0, 0), 2)
+            cv2.rectangle(img, (x, y), (x + w, y + h), (255, 0, 0), 2)
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             roi = gray[x:x + w, y:y + h]
             try:
-                roi = cv2.resize(roi, image_size, interpolation=cv2.INTER_LINEAR)
+                roi = cv2.resize(roi, (200, 200), interpolation=cv2.INTER_LINEAR)
                 params = model.predict(roi)
-                print(f"Label: {params[0]}, Confidence: {params[1]:.2f}")
-                cv2.putText(img, names[params[0]], (x, y - 20), cv2.FONT_HERSHEY_SIMPLEX, 1, 255, 2)
-            except Exception as e:
-                print(f"Error: {e}")
-        cv2.imshow("camera", img)
+                print(f"Label: {names[params[0]]}, Confidence: {params[1]:.2f}")
+                cv2.putText(img, names[params[0]], (x, y - 20), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2)
+            except:
+                continue
+
+        cv2.imshow("Face Recognition", img)
         if cv2.waitKey(1000 // 12) & 0xff == ord("q"):
             break
 
+    camera.release()
     cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
-    face_rec()
+    image_path = 'data/training_faces'
+    face_recognition_demo(image_path)
