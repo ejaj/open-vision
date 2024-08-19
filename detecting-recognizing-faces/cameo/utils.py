@@ -1,11 +1,13 @@
+import cv2
 import numpy
 import scipy.interpolate
 
 
 def createLookupArray(func, length=256):
-    """
-    Return a lookup for whole-number inputs to a function.
+    """Return a lookup for whole-number inputs to a function.
+
     The lookup values are clamped to [0, length - 1].
+
     """
     if func is None:
         return None
@@ -17,26 +19,14 @@ def createLookupArray(func, length=256):
         i += 1
     return lookupArray
 
-
 def applyLookupArray(lookupArray, src, dst):
-    """
-    Map a source to a destination using a lookup.
-    :param lookupArray:
-    :param src:
-    :param dst:
-    :return:
-    """
+    """Map a source to a destination using a lookup."""
     if lookupArray is None:
         return
     dst[:] = lookupArray[src]
 
-
 def createCurveFunc(points):
-    """
-    Return a function derived from control points.
-    :param points:
-    :return:
-    """
+    """Return a function derived from control points."""
     if points is None:
         return None
     numPoints = len(points)
@@ -49,18 +39,22 @@ def createCurveFunc(points):
         kind = 'quadratic'
     else:
         kind = 'cubic'
-    return scipy.interpolate.interp1d(xs, ys, kind, bounds_error=False)
-
+    return scipy.interpolate.interp1d(xs, ys, kind,
+                                      bounds_error = False)
 
 def createCompositeFunc(func0, func1):
-    """
-    Return a composite of two functions.
-    :param func0:
-    :param func1:
-    :return:
-    """
+    """Return a composite of two functions."""
     if func0 is None:
         return func1
     if func1 is None:
         return func0
     return lambda x: func0(func1(x))
+
+def isGray(image):
+    """Return True if the image has one channel per pixel."""
+    return image.ndim < 3
+
+def widthHeightDividedBy(image, divisor):
+    """Return an image's dimensions, divided by a value."""
+    h, w = image.shape[:2]
+    return (w//divisor, h//divisor)
