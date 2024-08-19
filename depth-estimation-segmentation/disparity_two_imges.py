@@ -1,7 +1,6 @@
 import cv2
 import numpy as np
 
-# StereoSGBM Parameters
 minDisparity = 16
 numDisparities = 192 - minDisparity
 blockSize = 5
@@ -25,21 +24,19 @@ stereo = cv2.StereoSGBM_create(
     P2=P2
 )
 
-# Load stereo images
-imgL = cv2.imread('data/color1_small.jpg')
-imgR = cv2.imread('data/color2_small.jpg')
+img_left = cv2.imread('data/color1_small.jpg')
+img_right = cv2.imread('data/color2_small.jpg')
 
-# Compute disparity
-disparity = stereo.compute(imgL, imgR).astype(np.float32) / 16.0
+disparity = stereo.compute(img_left, img_right)
 
-# Normalize for display
-disparity_normalized = cv2.normalize(disparity, disparity, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX,
-                                     dtype=cv2.CV_8U)
+# Normalize disparity for display
+disparity_display = cv2.normalize(disparity, None, alpha=255, beta=0, norm_type=cv2.NORM_MINMAX)
+disparity_display = np.uint8(disparity_display)
+
 # Display images and disparity map
-cv2.imshow('Left Image', imgL)
-cv2.imshow('Right Image', imgR)
-cv2.imshow('Disparity Map', disparity_normalized)
+cv2.imshow('Left Image', img_left)
+cv2.imshow('Right Image', img_right)
+cv2.imshow('Disparity Map', disparity_display)
 
-# Wait for a key press
-cv2.waitKey()
+cv2.waitKey(0)
 cv2.destroyAllWindows()

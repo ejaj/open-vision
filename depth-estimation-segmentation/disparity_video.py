@@ -1,8 +1,8 @@
-import numpy as np
 import cv2
 
+url = 'http://192.168.0.108:4747/video'
 left_camera = cv2.VideoCapture(0)
-right_camera = cv2.VideoCapture(1)
+right_camera = cv2.VideoCapture(url)
 
 # Create windows.
 cv2.namedWindow('Left Camera', cv2.WINDOW_NORMAL)
